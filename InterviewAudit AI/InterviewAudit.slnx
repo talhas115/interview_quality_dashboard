@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="InterviewAudit.Application/InterviewAudit.Application.csproj" />
+  <Project Path="InterviewAudit.Domain/InterviewAudit.Domain.csproj" />
+  <Project Path="InterviewAudit.Infrastructure/InterviewAudit.Infrastructure.csproj" />
+  <Project Path="InterviewAudit.Worker/InterviewAudit.Worker.csproj" />
+</Solution>

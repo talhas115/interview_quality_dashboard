@@ -1,0 +1,15 @@
+{
+  "LlmSettings": {
+    "UseMock": false,
+    "ActiveProvider": "Groq",
+    "Model": "llama-3.3-70b-versatile",
+    "ApiKey": "",
+    "GroqApiKeys": [
+      "YOUR_GROQ_API_KEY_1",
+      "YOUR_GROQ_API_KEY_2",
+      "YOUR_GROQ_API_KEY_3"
+    ],
+    "GroqRateLimitResetMinutes": 60,
+    "OllamaBaseUrl": "http://localhost:11434"
+  }
+}

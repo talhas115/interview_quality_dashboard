@@ -1,0 +1,11 @@
+C:\Users\user\Desktop\Zeeshan\Vibe Coding\POC\Interview Quality Dashboard\InterviewAudit AI\InterviewAudit.Domain\bin\Release\net10.0\InterviewAudit.Domain.deps.json
+C:\Users\user\Desktop\Zeeshan\Vibe Coding\POC\Interview Quality Dashboard\InterviewAudit AI\InterviewAudit.Domain\bin\Release\net10.0\InterviewAudit.Domain.dll
+C:\Users\user\Desktop\Zeeshan\Vibe Coding\POC\Interview Quality Dashboard\InterviewAudit AI\InterviewAudit.Domain\bin\Release\net10.0\InterviewAudit.Domain.pdb
+C:\Users\user\Desktop\Zeeshan\Vibe Coding\POC\Interview Quality Dashboard\InterviewAudit AI\InterviewAudit.Domain\obj\Release\net10.0\InterviewAudit.Domain.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\user\Desktop\Zeeshan\Vibe Coding\POC\Interview Quality Dashboard\InterviewAudit AI\InterviewAudit.Domain\obj\Release\net10.0\InterviewAudit.Domain.AssemblyInfoInputs.cache
+C:\Users\user\Desktop\Zeeshan\Vibe Coding\POC\Interview Quality Dashboard\InterviewAudit AI\InterviewAudit.Domain\obj\Release\net10.0\InterviewAudit.Domain.AssemblyInfo.cs
+C:\Users\user\Desktop\Zeeshan\Vibe Coding\POC\Interview Quality Dashboard\InterviewAudit AI\InterviewAudit.Domain\obj\Release\net10.0\InterviewAudit.Domain.csproj.CoreCompileInputs.cache
+C:\Users\user\Desktop\Zeeshan\Vibe Coding\POC\Interview Quality Dashboard\InterviewAudit AI\InterviewAudit.Domain\obj\Release\net10.0\InterviewAudit.Domain.dll
+C:\Users\user\Desktop\Zeeshan\Vibe Coding\POC\Interview Quality Dashboard\InterviewAudit AI\InterviewAudit.Domain\obj\Release\net10.0\refint\InterviewAudit.Domain.dll
+C:\Users\user\Desktop\Zeeshan\Vibe Coding\POC\Interview Quality Dashboard\InterviewAudit AI\InterviewAudit.Domain\obj\Release\net10.0\InterviewAudit.Domain.pdb
+C:\Users\user\Desktop\Zeeshan\Vibe Coding\POC\Interview Quality Dashboard\InterviewAudit AI\InterviewAudit.Domain\obj\Release\net10.0\ref\InterviewAudit.Domain.dll

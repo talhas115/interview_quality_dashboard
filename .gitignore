@@ -1,0 +1,26 @@
+# Build outputs
+[Bb]in/
+[Ob]j/
+
+# User-specific files
+*.user
+*.userosscache
+*.sln.docstates
+.vs/
+.idea/
+*.suo
+
+# Local configuration overrides (if any)
+appsettings.Development.json
+
+# Generated interview audit outputs (Reports and logs)
+**/Data/Reports/
+**/Data/processed-meetings.json
+**/Data/MockData/meetings_876ab97f-5bf6-4162-9228-da10f1bc2d76.json
+**/Data/MockData/transcript_mt-002.txt
+*.log
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db

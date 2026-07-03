@@ -1,0 +1,29 @@
+WEBVTT
+Language: en-US
+
+00:00:00.100 --> 00:00:05.200
+<v Jane Smith>Hello John, thanks for joining today. How are you doing?</v>
+
+00:00:05.500 --> 00:00:09.100
+<v John Doe>Hi Jane! I am doing great, thank you. Glad to be here.</v>
+
+00:00:09.600 --> 00:00:15.500
+<v Jane Smith>Excellent. Today we're interviewing you for the Senior .NET 10 Developer role. Let's start with C# basics. What is dependency injection and how do you implement it in .NET 10?</v>
+
+00:00:16.000 --> 00:00:30.000
+<v John Doe>Dependency injection is a design pattern used to achieve Inversion of Control between classes. In .NET 10, it is built-in. We register services in the Program.cs file using builders.Services.AddTransient or AddScoped or AddSingleton, and inject them via constructor injection.</v>
+
+00:00:30.500 --> 00:00:35.000
+<v Jane Smith>That is correct. What is the difference between scoped and singleton lifetime?</v>
+
+00:00:35.500 --> 00:00:48.000
+<v John Doe>A singleton service has a single instance created once for the lifetime of the application. A scoped service is created once per client request or scope. For example, in ASP.NET Core, it's created once per HTTP request.</v>
+
+00:00:48.500 --> 00:00:54.000
+<v Jane Smith>Very good. Have you worked with Clean Architecture before?</v>
+
+00:00:54.500 --> 00:01:10.000
+<v John Doe>Yes, in my last project, we divided the project into Domain, Application, Infrastructure, and Web layers. The Domain layer had no external dependencies, and all external integrations were hidden behind interfaces implemented in the Infrastructure layer.</v>
+
+00:01:10.500 --> 00:01:15.000
+<v Jane Smith>Excellent. That's exactly what we use. Thank you, John.</v>

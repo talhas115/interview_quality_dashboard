@@ -1,0 +1,86 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Interview Audit Automation"
+           Manufacturer="Zeeshan"
+           Version="1.0.0.0"
+           UpgradeCode="d2d3e18a-928d-44a5-9df0-bb46d2a71bf0"
+           Language="1033">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+
+    <!-- Directory Layout -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Interview Audit Automation" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="DATAINSTALLFOLDER" Name="InterviewAudit">
+        <Directory Id="ReportsFolder" Name="Reports" />
+        <Directory Id="LogsFolder" Name="Logs" />
+        <Directory Id="PromptsFolder" Name="Prompts" />
+        <Directory Id="MockDataFolder" Name="MockData" />
+      </Directory>
+    </StandardDirectory>
+
+    <!-- Components -->
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+      
+      <!-- Worker Executable and Service Registration -->
+      <Component Id="WorkerServiceComponent" Guid="c37df6d5-a359-450f-90e9-b57f00d2382e">
+        <File Id="WorkerExe" Source="..\InterviewAudit.Worker\bin\Release\net10.0\win-x64\publish\InterviewAudit.Worker.exe" KeyPath="yes" />
+        
+        <ServiceInstall
+          Id="ServiceInstaller"
+          Type="ownProcess"
+          Name="InterviewAuditService"
+          DisplayName="Interview Audit Automation Service"
+          Description="Automates Microsoft Teams interview transcript evaluations using LLMs."
+          Start="auto"
+          ErrorControl="normal" />
+
+        <ServiceControl
+          Id="ServiceController"
+          Name="InterviewAuditService"
+          Start="install"
+          Stop="both"
+          Remove="uninstall" />
+      </Component>
+
+      <!-- Library Dependencies -->
+      <Component Id="DomainDllComponent" Guid="b4a92c4e-5df0-4b2a-82bc-9d36a36c57f1">
+        <File Id="DomainDll" Source="..\InterviewAudit.Worker\bin\Release\net10.0\win-x64\publish\InterviewAudit.Domain.dll" KeyPath="yes" />
+      </Component>
+
+      <Component Id="ApplicationDllComponent" Guid="b4a92c4e-5df0-4b2a-82bc-9d36a36c57f2">
+        <File Id="ApplicationDll" Source="..\InterviewAudit.Worker\bin\Release\net10.0\win-x64\publish\InterviewAudit.Application.dll" KeyPath="yes" />
+      </Component>
+
+      <Component Id="InfrastructureDllComponent" Guid="b4a92c4e-5df0-4b2a-82bc-9d36a36c57f3">
+        <File Id="InfrastructureDll" Source="..\InterviewAudit.Worker\bin\Release\net10.0\win-x64\publish\InterviewAudit.Infrastructure.dll" KeyPath="yes" />
+      </Component>
+
+      <!-- Configuration Files (Installed to executable folder) -->
+      <Component Id="AppSettingsComponent" Guid="e307f594-c10d-45db-996b-07cd7e263d91">
+        <File Id="AppSettingsJson" Source="..\InterviewAudit.Worker\bin\Release\net10.0\win-x64\publish\appsettings.json" KeyPath="yes" />
+      </Component>
+
+      <Component Id="GroupsConfigComponent" Guid="d307f594-c10d-45db-996b-07cd7e263d92">
+        <File Id="GroupsJson" Source="..\InterviewAudit.Worker\bin\Release\net10.0\win-x64\publish\groups.json" KeyPath="yes" />
+      </Component>
+
+      <Component Id="LlmConfigComponent" Guid="f307f594-c10d-45db-996b-07cd7e263d93">
+        <File Id="LlmJson" Source="..\InterviewAudit.Worker\bin\Release\net10.0\win-x64\publish\llm.json" KeyPath="yes" />
+      </Component>
+
+      <Component Id="PromptsConfigComponent" Guid="a307f594-c10d-45db-996b-07cd7e263d94">
+        <File Id="PromptsJson" Source="..\InterviewAudit.Worker\bin\Release\net10.0\win-x64\publish\prompts.json" KeyPath="yes" />
+      </Component>
+      
+    </ComponentGroup>
+
+    <!-- Main Installation Feature -->
+    <Feature Id="MainFeature" Title="Interview Audit Automation" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+    </Feature>
+
+  </Package>
+</Wix>

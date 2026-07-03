@@ -1,0 +1,12 @@
+{
+  "Groups": [
+    {
+      "Id": "group-001",
+      "Name": "Engineering Teams Interview Group"
+    },
+    {
+      "Id": "group-002",
+      "Name": "Solutions Architecture Group"
+    }
+  ]
+}

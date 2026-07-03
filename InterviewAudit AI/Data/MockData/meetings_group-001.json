@@ -1,0 +1,65 @@
+[
+  {
+    "Id": "mt-001",
+    "Subject": "Senior .NET 10 Developer Interview - John Doe",
+    "Description": "Candidate Name: John Doe\r\nInterviewer Name: Jane Smith\r\n\r\nJob Description:\r\nWe are looking for a Senior .NET 10 Engineer with strong experience in C#, ASP.NET Core, SQL Server, and Microsoft Graph API. Knowledge of clean architecture and AI integration is highly preferred.",
+    "OrganizerName": "jane.smith@example.com",
+    "Attendees": [
+      {
+        "Name": "Jane Smith",
+        "Email": "jane.smith@example.com",
+        "Role": "Organizer"
+      },
+      {
+        "Name": "John Doe",
+        "Email": "john.doe@external.com",
+        "Role": "External"
+      }
+    ],
+    "JoinUrl": "",
+    "StartDateTime": "2026-06-10T16:09:15.5983256+05:30",
+    "EndDateTime": "2026-06-10T17:09:15.5984471+05:30"
+  },
+  {
+    "Id": "mt-002",
+    "Subject": "Angular Developer Interview - Mark Miller",
+    "Description": "Candidate Name: Mark Miller\r\nInterviewer Name: Jane Smith\r\n\r\nNotice: This meeting is missing the JD field to test the fallback skip logic.",
+    "OrganizerName": "jane.smith@example.com",
+    "Attendees": [
+      {
+        "Name": "Jane Smith",
+        "Email": "jane.smith@example.com",
+        "Role": "Organizer"
+      },
+      {
+        "Name": "Mark Miller",
+        "Email": "mark.m@external.com",
+        "Role": "External"
+      }
+    ],
+    "JoinUrl": "",
+    "StartDateTime": "2026-06-10T18:09:15.5987288+05:30",
+    "EndDateTime": "2026-06-10T18:39:15.5987308+05:30"
+  },
+  {
+    "Id": "mt-003",
+    "Subject": "Cloud Architect Technical Assessment",
+    "Description": "Job Description:\r\nDesign and implement Azure cloud landing zones, DevOps pipelines, and IaC using Terraform. Must have Azure Solution Architect Certification.\r\n\r\nNotice: This meeting has candidate and interviewer names missing in the description to test the LLM pre-analysis attendee extraction.",
+    "OrganizerName": "bob.jones@example.com",
+    "Attendees": [
+      {
+        "Name": "Bob Jones",
+        "Email": "bob.jones@example.com",
+        "Role": "Organizer"
+      },
+      {
+        "Name": "Alice Wright",
+        "Email": "alice.wright@external.com",
+        "Role": "External"
+      }
+    ],
+    "JoinUrl": "",
+    "StartDateTime": "2026-06-09T18:09:15.5987345+05:30",
+    "EndDateTime": "2026-06-09T19:09:15.5987346+05:30"
+  }
+]

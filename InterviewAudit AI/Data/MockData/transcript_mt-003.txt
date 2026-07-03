@@ -1,0 +1,13 @@
+WEBVTT
+
+00:00:00.100 --> 00:00:04.500
+<v Bob Jones>Welcome to the Technical Assessment. Let's get started. Alice, could you tell me about your Terraform experience?</v>
+
+00:00:05.000 --> 00:00:20.000
+<v Alice Wright>Sure, Bob. I've designed Azure cloud landing zones using Terraform modules. I write reusable modules for virtual networks, App Services, and key vaults, managing state files remotely in Azure Blob Storage with state locking.</v>
+
+00:00:20.500 --> 00:00:25.000
+<v Bob Jones>Great. What Azure certifications do you hold?</v>
+
+00:00:25.500 --> 00:00:32.000
+<v Alice Wright>I hold the Azure Solutions Architect Expert certification, which covers design patterns, security, and infrastructure scale.</v>

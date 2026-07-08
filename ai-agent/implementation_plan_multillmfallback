@@ -1,0 +1,94 @@
+# Multi-Provider LLM Fallback Pipeline (Generalized Key Management)
+
+This plan outlines the architecture and changes required to implement a **sequential multi-provider LLM fallback pipeline** with generalized, multi-key rotation capabilities for all cloud LLM providers.
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Consolidated Config & Backward Compatibility:**
+> We are extending the `ProviderSettings` configuration class to support:
+> * `ApiKey` (single string, for backward compatibility)
+> * `ApiKeys` (list of strings, for configuring multiple keys)
+> * `RateLimitResetMinutes` (defaulting to 60, reset cooldown duration for exhausted keys)
+>
+> We will update `llm.json` to show how multiple keys can be defined for any provider.
+
+---
+
+## Proposed Changes
+
+### Domain Component
+
+No changes are required in the core Domain project. The fallback router will implement the existing [ILlmService](file:///c:/Neosoft/Interview%20Quality%20Dashboard/InterviewAudit%20AI/InterviewAudit.Domain/Interfaces/ILlmService.cs) contract.
+
+---
+
+### Infrastructure Component
+
+We will implement a unified `LlmApiKeyManager`, update individual cloud providers (`OpenAiLlmService`, `ClaudeLlmService`, `GeminiLlmService`, `GroqLlmService`) to support key rotation on rate limits, and register them in DI.
+
+#### [NEW] [ILlmApiKeyManager.cs](file:///c:/Neosoft/Interview%20Quality%20Dashboard/InterviewAudit%20AI/InterviewAudit.Infrastructure/Llm/ILlmApiKeyManager.cs)
+* Create a generalized key manager interface.
+  ```csharp
+  namespace InterviewAudit.Infrastructure.Llm
+  {
+      public interface ILlmApiKeyManager
+      {
+          string GetNextAvailableKey(string providerName);
+          void MarkKeyExhausted(string providerName, string key);
+          bool HasAvailableKeys(string providerName);
+      }
+  }
+  ```
+
+#### [NEW] [LlmApiKeyManager.cs](file:///c:/Neosoft/Interview%20Quality%20Dashboard/InterviewAudit%20AI/InterviewAudit.Infrastructure/Llm/LlmApiKeyManager.cs)
+* Implement `ILlmApiKeyManager` with a thread-safe `ConcurrentDictionary<string, DateTimeOffset>` mapping exhausted keys to their expiration reset time.
+* Resolve keys for a provider by checking:
+  1. `ProviderSettings.ApiKeys`
+  2. `ProviderSettings.ApiKey`
+  3. `LlmSettings.ApiKey` (root fallback)
+  4. (For Groq) `LlmSettings.GroqApiKeys`
+* Filter out blank entries and placeholders (e.g. starting with `"YOUR_"`).
+
+#### [DELETE] [IGroqApiKeyManager.cs](file:///c:/Neosoft/Interview%20Quality%20Dashboard/InterviewAudit%20AI/InterviewAudit.Infrastructure/Llm/IGroqApiKeyManager.cs)
+* Remove the Groq-specific interface.
+
+#### [DELETE] [GroqApiKeyManager.cs](file:///c:/Neosoft/Interview%20Quality%20Dashboard/InterviewAudit%20AI/InterviewAudit.Infrastructure/Llm/GroqApiKeyManager.cs)
+* Remove the Groq-specific implementation class.
+
+#### [MODIFY] [LlmServiceFactory.cs](file:///c:/Neosoft/Interview%20Quality%20Dashboard/InterviewAudit%20AI/InterviewAudit.Infrastructure/Llm/LlmServiceFactory.cs)
+* Extend `ProviderSettings` to include `ApiKeys` and `RateLimitResetMinutes`.
+* Modify `GroqSettings` to inherit from `ProviderSettings`.
+
+#### [MODIFY] [OpenAiLlmService.cs](file:///c:/Neosoft/Interview%20Quality%20Dashboard/InterviewAudit%20AI/InterviewAudit.Infrastructure/Llm/OpenAiLlmService.cs), [ClaudeLlmService.cs](file:///c:/Neosoft/Interview%20Quality%20Dashboard/InterviewAudit%20AI/InterviewAudit.Infrastructure/Llm/ClaudeLlmService.cs), [GeminiLlmService.cs](file:///c:/Neosoft/Interview%20Quality%20Dashboard/InterviewAudit%20AI/InterviewAudit.Infrastructure/Llm/GeminiLlmService.cs), [GroqLlmService.cs](file:///c:/Neosoft/Interview%20Quality%20Dashboard/InterviewAudit%20AI/InterviewAudit.Infrastructure/Llm/GroqLlmService.cs)
+* Update `IsAvailable()` to delegate to `_apiKeyManager.HasAvailableKeys("ProviderName")`.
+* Inject the unified `ILlmApiKeyManager`.
+* Add logic to sequentially try all keys for the provider if a 429 / rate-limit failure occurs, marking exhausted keys accordingly, and throw an error only when all keys are exhausted.
+
+---
+
+### Worker / Config Component
+
+We will register the new key manager in DI and update configuration files.
+
+#### [MODIFY] [Program.cs](file:///c:/Neosoft/Interview%20Quality%20Dashboard/InterviewAudit%20AI/InterviewAudit.Worker/Program.cs)
+* Register `ILlmApiKeyManager` as singleton.
+* Update LLM services registrations to inject `ILlmApiKeyManager`.
+
+#### [MODIFY] [llm.json](file:///c:/Neosoft/Interview%20Quality%20Dashboard/InterviewAudit%20AI/InterviewAudit.Worker/llm.json)
+* Define individual model/key settings structure with `ApiKeys` list support for all cloud providers.
+
+---
+
+## Verification Plan
+
+### Automated Tests
+* Run `dotnet build` to ensure the entire solution compiles without errors.
+* Path: [InterviewAudit.sln](file:///c:/Neosoft/Interview%20Quality%20Dashboard/InterviewAudit%20AI/InterviewAudit.sln)
+
+### Manual Verification
+1. Run local mock execution with `"ActiveProvider": "FallbackPipeline"`.
+2. Verify that the pipeline operates correctly.
+3. Test failure escalation: set a fake key or trigger rate limits on the first provider, verify it attempts all configured keys for that provider first, and then cascades to the next available provider.

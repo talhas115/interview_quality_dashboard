@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -14,15 +13,15 @@ namespace InterviewAudit.Infrastructure.Llm
 {
     public class ClaudeLlmService : ILlmService
     {
-        public bool IsAvailable() => true;
-        private readonly string _apiKey;
+        public bool IsAvailable() => _apiKeyManager.HasAvailableKeys("Claude");
+        private readonly ILlmApiKeyManager _apiKeyManager;
         private readonly string _modelName;
         private readonly ILogger<ClaudeLlmService> _logger;
         private static readonly HttpClient HttpClient = new HttpClient();
 
-        public ClaudeLlmService(string apiKey, string modelName, ILogger<ClaudeLlmService> logger)
+        public ClaudeLlmService(ILlmApiKeyManager apiKeyManager, string modelName, ILogger<ClaudeLlmService> logger)
         {
-            _apiKey = apiKey;
+            _apiKeyManager = apiKeyManager;
             _modelName = modelName;
             _logger = logger;
         }
@@ -37,19 +36,17 @@ namespace InterviewAudit.Infrastructure.Llm
                 .Replace("<PASTE JD HERE>", jd)
                 .Replace("<PASTE INTERVIEW TRANSCRIPT HERE>", transcript);
 
-            return await CallClaudeApiAsync(fullPrompt, 4000, cancellationToken);
+            return await CallClaudeApiInternalAsync(fullPrompt, 4000, cancellationToken);
         }
 
         public async Task<string> GenerateTextAsync(string prompt, int maxTokens, CancellationToken cancellationToken)
         {
-            return await Task.FromResult(string.Empty);
+            return await CallClaudeApiInternalAsync(prompt, maxTokens, cancellationToken);
         }
 
         public async Task<(string CandidateName, string InterviewerName)> ExtractAttendeesAsync(List<Attendee> attendees, string transcriptSample, CancellationToken cancellationToken)
         {
             _logger.LogInformation("Claude: Extracting candidate and interviewer names using model {Model}...", _modelName);
-
-        
 
             string attendeesJson = JsonSerializer.Serialize(attendees);
             string extractionPrompt = $@"You are a meeting assistant. Analyze the following Teams meeting attendees and the beginning of the interview transcript. Identify who is the candidate (interviewee) and who is the interviewer.
@@ -69,7 +66,7 @@ Example:
 
             try
             {
-                string responseText = await CallClaudeApiAsync(extractionPrompt, 1000, cancellationToken);
+                string responseText = await CallClaudeApiInternalAsync(extractionPrompt, 1000, cancellationToken);
                 var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 var result = JsonSerializer.Deserialize<AttendeeExtractionResult>(CleanJsonSnippet(responseText), options);
 
@@ -87,45 +84,88 @@ Example:
             return (string.Empty, string.Empty);
         }
 
-        private async Task<string> CallClaudeApiAsync(string prompt, int maxTokens, CancellationToken cancellationToken)
+        private async Task<string> CallClaudeApiInternalAsync(string prompt, int maxTokens, CancellationToken cancellationToken)
         {
-            var request = new HttpRequestMessage(HttpMethod.Post, "https://api.anthropic.com/v1/messages");
-            request.Headers.Add("x-api-key", _apiKey);
-            request.Headers.Add("anthropic-version", "2023-06-01");
+            int maxRetries = 5;
+            int retryDelayMs = 2000;
 
-            var payload = new ClaudeRequest
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
-                Model = _modelName,
-                MaxTokens = maxTokens,
-                Messages = new List<ClaudeMessage>
+                string activeKey = _apiKeyManager.GetNextAvailableKey("Claude");
+                if (string.IsNullOrWhiteSpace(activeKey))
                 {
-                    new ClaudeMessage { Role = "user", Content = prompt }
-                }
-            };
-
-            string jsonPayload = JsonSerializer.Serialize(payload);
-            request.Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
-
-            try
-            {
-                var response = await HttpClient.SendAsync(request, cancellationToken);
-                response.EnsureSuccessStatusCode();
-
-                string jsonResponse = await response.Content.ReadAsStringAsync(cancellationToken);
-                var responseObj = JsonSerializer.Deserialize<ClaudeResponse>(jsonResponse);
-
-                if (responseObj?.Content != null && responseObj.Content.Count > 0)
-                {
-                    return responseObj.Content[0].Text ?? string.Empty;
+                    _logger.LogError("Claude API: No available API keys. All keys are currently exhausted.");
+                    throw new InvalidOperationException("All Claude API keys are exhausted. Cannot proceed.");
                 }
 
-                throw new InvalidOperationException("Claude API response did not contain content.");
+                var request = new HttpRequestMessage(HttpMethod.Post, "https://api.anthropic.com/v1/messages");
+                request.Headers.Add("x-api-key", activeKey);
+                request.Headers.Add("anthropic-version", "2023-06-01");
+
+                var payload = new ClaudeRequest
+                {
+                    Model = _modelName,
+                    MaxTokens = maxTokens,
+                    Messages = new List<ClaudeMessage>
+                    {
+                        new ClaudeMessage { Role = "user", Content = prompt }
+                    }
+                };
+
+                string jsonPayload = JsonSerializer.Serialize(payload);
+                request.Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+
+                try
+                {
+                    var response = await HttpClient.SendAsync(request, cancellationToken);
+                    string responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        if ((int)response.StatusCode == 429)
+                        {
+                            _logger.LogWarning("Claude API Rate limit exhausted (429) for current key. Attempt {Attempt}/{MaxRetries}", attempt, maxRetries);
+                            _apiKeyManager.MarkKeyExhausted("Claude", activeKey);
+                            if (attempt == maxRetries)
+                            {
+                                response.EnsureSuccessStatusCode();
+                            }
+                            continue;
+                        }
+                        else if ((int)response.StatusCode >= 500)
+                        {
+                            _logger.LogWarning("Claude API Server error (Attempt {Attempt}/{MaxRetries}): {StatusCode}", attempt, maxRetries, response.StatusCode);
+                            if (attempt == maxRetries)
+                            {
+                                response.EnsureSuccessStatusCode();
+                            }
+                            await Task.Delay(retryDelayMs, cancellationToken);
+                            retryDelayMs *= 2;
+                            continue;
+                        }
+
+                        _logger.LogError("Claude API Error: {StatusCode} - {Content}", response.StatusCode, responseContent);
+                        throw new InvalidOperationException($"Claude API Error: {response.StatusCode} - {responseContent}");
+                    }
+
+                    var responseObj = JsonSerializer.Deserialize<ClaudeResponse>(responseContent);
+                    if (responseObj?.Content != null && responseObj.Content.Count > 0)
+                    {
+                        return responseObj.Content[0].Text ?? string.Empty;
+                    }
+
+                    throw new InvalidOperationException("Claude API response did not contain content.");
+                }
+                catch (HttpRequestException ex)
+                {
+                    if (attempt == maxRetries) throw;
+                    _logger.LogWarning(ex, "Claude API Transient network error (Attempt {Attempt}/{MaxRetries})", attempt, maxRetries);
+                    await Task.Delay(retryDelayMs, cancellationToken);
+                    retryDelayMs *= 2;
+                }
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Claude API call failed.");
-                throw;
-            }
+
+            return string.Empty;
         }
 
         private string CleanJsonSnippet(string text)
@@ -191,11 +231,3 @@ Example:
         }
     }
 }
-
-
-
-
-
-
-
-

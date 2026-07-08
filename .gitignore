@@ -16,6 +16,9 @@ obj/
 
 # Local configuration overrides (if any)
 appsettings.Development.json
+llm.Development.json
+llm.*.json
+!llm.json
 
 # Generated interview audit outputs (Reports and logs)
 **/Data/Reports/

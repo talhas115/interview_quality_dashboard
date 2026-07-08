@@ -1,15 +1,62 @@
 {
   "LlmSettings": {
     "UseMock": false,
-    "ActiveProvider": "Groq",
+    "ActiveProvider": "FallbackPipeline",
     "Model": "llama-3.3-70b-versatile",
     "ApiKey": "",
     "GroqApiKeys": [
-      "YOUR_GROQ_API_KEY_1",
-      "YOUR_GROQ_API_KEY_2",
-      "YOUR_GROQ_API_KEY_3"
+      "gsk_YOUR_GROQ_API_KEY_1",
+      "gsk_YOUR_GROQ_API_KEY_2",
+      "gsk_YOUR_GROQ_API_KEY_3"
     ],
     "GroqRateLimitResetMinutes": 60,
-    "OllamaBaseUrl": "http://localhost:11434"
+    "OllamaBaseUrl": "http://localhost:11434",
+    "FallbackChain": [
+      "Groq",
+      "OpenAI",
+      "Gemini",
+      "Claude",
+      "Ollama"
+    ],
+    "OpenAiSettings": {
+      "ApiKey": "sk-proj-YOUR_OPENAI_API_KEY",
+      "ApiKeys": [
+        "sk-proj-YOUR_OPENAI_API_KEY"
+      ],
+      "Model": "gpt-4o-mini",
+      "RateLimitResetMinutes": 60
+    },
+    "ClaudeSettings": {
+      "ApiKey": "sk-ant-api03-YOUR_CLAUDE_API_KEY",
+      "ApiKeys": [
+        "sk-ant-api03-YOUR_CLAUDE_API_KEY"
+      ],
+      "Model": "claude-3-5-haiku-20241022",
+      "RateLimitResetMinutes": 60
+    },
+    "GeminiSettings": {
+      "ApiKey": "AQ.YOUR_GEMINI_API_KEY",
+      "ApiKeys": [
+        "AQ.YOUR_GEMINI_API_KEY"
+      ],
+      "Model": "gemini-2.0-flash",
+      "RateLimitResetMinutes": 60
+    },
+    "OllamaSettings": {
+      "BaseUrl": "http://localhost:11434",
+      "Model": "qwen3:8b"
+    },
+    "GroqSettings": {
+      "ApiKey": "gsk_YOUR_GROQ_API_KEY_A",
+      "ApiKeys": [
+        "gsk_YOUR_GROQ_API_KEY_B",
+        "gsk_YOUR_GROQ_API_KEY_A",
+        "gsk_YOUR_GROQ_API_KEY_1",
+        "gsk_YOUR_GROQ_API_KEY_2",
+        "gsk_YOUR_GROQ_API_KEY_3"
+      ],
+      "Model": "llama-3.3-70b-versatile",
+      "RateLimitResetMinutes": 60
+    }
   }
 }

@@ -1,44 +1,58 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using InterviewAudit.Application.Services;
+using InterviewAudit.Infrastructure.Persistence;
 
 namespace InterviewAudit.Worker
 {
     public class Worker : BackgroundService
     {
-        private readonly AuditScheduler _scheduler;
+        private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<Worker> _logger;
         private readonly SchedulerOptions _options;
 
-        private readonly InterviewAudit.Domain.Interfaces.IStateRepository _stateRepository;
-
         public Worker(
-            AuditScheduler scheduler,
+            IServiceScopeFactory scopeFactory,
             ILogger<Worker> logger,
-            IOptions<SchedulerOptions> options,
-            InterviewAudit.Domain.Interfaces.IStateRepository stateRepository)
+            IOptions<SchedulerOptions> options)
         {
-            _scheduler = scheduler;
+            _scopeFactory = scopeFactory;
             _logger = logger;
             _options = options.Value;
-            _stateRepository = stateRepository;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation("Interview Audit Automation Service started. Run Interval: {Interval} seconds.", _options.IntervalSeconds);
-            await _stateRepository.ResetFilterExecutionStateAsync(stoppingToken);
+
+            using (var scope = _scopeFactory.CreateScope())
+            {
+                var stateRepository = scope.ServiceProvider.GetRequiredService<InterviewAudit.Domain.Interfaces.IStateRepository>();
+                await stateRepository.ResetFilterExecutionStateAsync(stoppingToken);
+
+                // Run self-healing database sync if using the composite store
+                if (stateRepository is CompositeStateRepository compositeRepo)
+                {
+                    await compositeRepo.SyncDatabaseWithJsonAsync(stoppingToken);
+                }
+            }
 
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
                     _logger.LogInformation("Starting scheduled audit check...");
-                    await _scheduler.ExecuteAsync(stoppingToken);
+
+                    using (var scope = _scopeFactory.CreateScope())
+                    {
+                        var scheduler = scope.ServiceProvider.GetRequiredService<AuditScheduler>();
+                        await scheduler.ExecuteAsync(stoppingToken);
+                    }
                 }
                 catch (Exception ex)
                 {

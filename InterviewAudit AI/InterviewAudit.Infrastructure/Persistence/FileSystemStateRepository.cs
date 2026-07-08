@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using InterviewAudit.Domain.Interfaces;
+using InterviewAudit.Domain.Models;
 using InterviewAudit.Application.Services;
 
 namespace InterviewAudit.Infrastructure.Persistence
@@ -34,9 +35,9 @@ namespace InterviewAudit.Infrastructure.Persistence
                     var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     foreach(var item in list)
                     {
-                        if (item.Length > 0 && !string.IsNullOrEmpty(item[0]))
+                        if (item != null && !string.IsNullOrEmpty(item.MeetingId))
                         {
-                            ids.Add(item[0]);
+                            ids.Add(item.MeetingId);
                         }
                     }
                     return ids;
@@ -92,22 +93,24 @@ namespace InterviewAudit.Infrastructure.Persistence
             }
         }
 
-        public async Task AddProcessedMeetingIdAsync(string groupId, string meetingId, string candidateId, CancellationToken cancellationToken)
+        public async Task AddProcessedMeetingIdAsync(string groupId, ProcessedMeetingInfo meetingInfo, CancellationToken cancellationToken)
         {
+            if (meetingInfo == null) return;
+
             await FileLock.WaitAsync(cancellationToken);
             try
             {
                 var state = await LoadStateAsync(cancellationToken);
                 if (!state.TryGetValue(groupId, out var list))
                 {
-                    list = new List<string[]>();
+                    list = new List<ProcessedMeetingInfo>();
                     state[groupId] = list;
                 }
 
                 bool exists = false;
                 foreach(var item in list)
                 {
-                    if (item.Length > 0 && item[0].Equals(meetingId, StringComparison.OrdinalIgnoreCase))
+                    if (item != null && item.MeetingId.Equals(meetingInfo.MeetingId, StringComparison.OrdinalIgnoreCase))
                     {
                         exists = true;
                         break;
@@ -116,9 +119,9 @@ namespace InterviewAudit.Infrastructure.Persistence
 
                 if (!exists)
                 {
-                    list.Add(new string[] { meetingId, candidateId ?? "" });
+                    list.Add(meetingInfo);
                     await SaveStateAsync(state, cancellationToken);
-                    _logger.LogInformation("Added meeting {MeetingId} with Candidate {CandidateId} to processed list for group {GroupId}", meetingId, candidateId, groupId);
+                    _logger.LogInformation("Added meeting {MeetingId} with Candidate {CandidateId} and metadata to processed list for group {GroupId}", meetingInfo.MeetingId, meetingInfo.CandidateId, groupId);
                 }
             }
             finally
@@ -127,11 +130,24 @@ namespace InterviewAudit.Infrastructure.Persistence
             }
         }
 
-        private async Task<Dictionary<string, List<string[]>>> LoadStateAsync(CancellationToken cancellationToken)
+        public async Task<Dictionary<string, List<ProcessedMeetingInfo>>> GetAllProcessedMeetingsAsync(CancellationToken cancellationToken)
+        {
+            await FileLock.WaitAsync(cancellationToken);
+            try
+            {
+                return await LoadStateAsync(cancellationToken);
+            }
+            finally
+            {
+                FileLock.Release();
+            }
+        }
+
+        private async Task<Dictionary<string, List<ProcessedMeetingInfo>>> LoadStateAsync(CancellationToken cancellationToken)
         {
             if (!File.Exists(_filePath))
             {
-                return new Dictionary<string, List<string[]>>(StringComparer.OrdinalIgnoreCase);
+                return new Dictionary<string, List<ProcessedMeetingInfo>>(StringComparer.OrdinalIgnoreCase);
             }
 
             try
@@ -140,44 +156,92 @@ namespace InterviewAudit.Infrastructure.Persistence
                 
                 if (string.IsNullOrWhiteSpace(json))
                 {
-                    return new Dictionary<string, List<string[]>>(StringComparer.OrdinalIgnoreCase);
+                    return new Dictionary<string, List<ProcessedMeetingInfo>>(StringComparer.OrdinalIgnoreCase);
                 }
 
+                // 1. Try to deserialize the new metadata structure
                 try 
                 {
-                    var dict = JsonSerializer.Deserialize<Dictionary<string, List<string[]>>>(json);
-                    return dict != null 
-                        ? new Dictionary<string, List<string[]>>(dict, StringComparer.OrdinalIgnoreCase)
-                        : new Dictionary<string, List<string[]>>(StringComparer.OrdinalIgnoreCase);
+                    var dict = JsonSerializer.Deserialize<Dictionary<string, List<ProcessedMeetingInfo>>>(json);
+                    if (dict != null)
+                    {
+                        return new Dictionary<string, List<ProcessedMeetingInfo>>(dict, StringComparer.OrdinalIgnoreCase);
+                    }
                 }
                 catch
                 {
-                    // Fallback for old dictionary format
+                    // Fallback to older formats
+                }
+
+                // 2. Fallback to intermediate string[] structure
+                try
+                {
+                    var midDict = JsonSerializer.Deserialize<Dictionary<string, List<string[]>>>(json);
+                    var newDict = new Dictionary<string, List<ProcessedMeetingInfo>>(StringComparer.OrdinalIgnoreCase);
+                    if (midDict != null)
+                    {
+                        foreach (var kvp in midDict)
+                        {
+                            var newList = new List<ProcessedMeetingInfo>();
+                            foreach (var item in kvp.Value)
+                            {
+                                if (item != null && item.Length > 0)
+                                {
+                                    newList.Add(new ProcessedMeetingInfo
+                                    {
+                                        MeetingId = item[0],
+                                        CandidateId = item.Length > 1 ? item[1] : ""
+                                    });
+                                }
+                            }
+                            newDict[kvp.Key] = newList;
+                        }
+                        return newDict;
+                    }
+                }
+                catch
+                {
+                    // Fallback to basic string list
+                }
+
+                // 3. Fallback for oldest basic string list format
+                try
+                {
                     var oldDict = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(json);
-                    var newDict = new Dictionary<string, List<string[]>>(StringComparer.OrdinalIgnoreCase);
+                    var newDict = new Dictionary<string, List<ProcessedMeetingInfo>>(StringComparer.OrdinalIgnoreCase);
                     if (oldDict != null)
                     {
                         foreach (var kvp in oldDict)
                         {
-                            var newList = new List<string[]>();
-                            foreach(var id in kvp.Value)
+                            var newList = new List<ProcessedMeetingInfo>();
+                            foreach (var id in kvp.Value)
                             {
-                                newList.Add(new string[] { id, "" });
+                                newList.Add(new ProcessedMeetingInfo
+                                {
+                                    MeetingId = id,
+                                    CandidateId = ""
+                                });
                             }
                             newDict[kvp.Key] = newList;
                         }
+                        return newDict;
                     }
-                    return newDict;
                 }
+                catch
+                {
+                    // Catch and let it fall back
+                }
+
+                return new Dictionary<string, List<ProcessedMeetingInfo>>(StringComparer.OrdinalIgnoreCase);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to load state file from {Path}. Starting with empty state.", _filePath);
-                return new Dictionary<string, List<string[]>>(StringComparer.OrdinalIgnoreCase);
+                return new Dictionary<string, List<ProcessedMeetingInfo>>(StringComparer.OrdinalIgnoreCase);
             }
         }
 
-        private async Task SaveStateAsync(Dictionary<string, List<string[]>> state, CancellationToken cancellationToken)
+        private async Task SaveStateAsync(Dictionary<string, List<ProcessedMeetingInfo>> state, CancellationToken cancellationToken)
         {
             try
             {

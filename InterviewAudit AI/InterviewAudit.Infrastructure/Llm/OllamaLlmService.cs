@@ -13,7 +13,7 @@ namespace InterviewAudit.Infrastructure.Llm
 {
     public class OllamaLlmService : ILlmService
     {
-        public bool IsAvailable() => true;
+        public bool IsAvailable() => !string.IsNullOrWhiteSpace(_baseUrl) && !string.IsNullOrWhiteSpace(_modelName);
         private readonly string _baseUrl;
         private readonly string _modelName;
         private readonly ILogger<OllamaLlmService> _logger;

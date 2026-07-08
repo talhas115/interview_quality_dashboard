@@ -13,15 +13,15 @@ namespace InterviewAudit.Infrastructure.Llm
 {
     public class GeminiLlmService : ILlmService
     {
-        public bool IsAvailable() => true;
-        private readonly string _apiKey;
+        public bool IsAvailable() => _apiKeyManager.HasAvailableKeys("Gemini");
+        private readonly ILlmApiKeyManager _apiKeyManager;
         private readonly string _modelName;
         private readonly ILogger<GeminiLlmService> _logger;
         private static readonly HttpClient HttpClient = new HttpClient();
 
-        public GeminiLlmService(string apiKey, string modelName, ILogger<GeminiLlmService> logger)
+        public GeminiLlmService(ILlmApiKeyManager apiKeyManager, string modelName, ILogger<GeminiLlmService> logger)
         {
-            _apiKey = apiKey;
+            _apiKeyManager = apiKeyManager;
             _modelName = modelName;
             _logger = logger;
         }
@@ -41,14 +41,12 @@ namespace InterviewAudit.Infrastructure.Llm
 
         public async Task<string> GenerateTextAsync(string prompt, int maxTokens, CancellationToken cancellationToken)
         {
-            return await Task.FromResult(string.Empty);
+            return await CallGeminiApiAsync(prompt, maxTokens, cancellationToken);
         }
 
         public async Task<(string CandidateName, string InterviewerName)> ExtractAttendeesAsync(List<Attendee> attendees, string transcriptSample, CancellationToken cancellationToken)
         {
             _logger.LogInformation("Gemini: Extracting candidate and interviewer names using model {Model}...", _modelName);
-
-        
 
             string attendeesJson = JsonSerializer.Serialize(attendees);
             string extractionPrompt = $@"You are a meeting assistant. Analyze the following Teams meeting attendees and the beginning of the interview transcript. Identify who is the candidate (interviewee) and who is the interviewer.
@@ -88,8 +86,6 @@ Example:
 
         private async Task<string> CallGeminiApiAsync(string prompt, int maxTokens, CancellationToken cancellationToken)
         {
-            string url = $"https://generativelanguage.googleapis.com/v1beta/models/{_modelName}:generateContent?key={_apiKey}";
-            
             var payload = new
             {
                 contents = new[]
@@ -112,6 +108,15 @@ Example:
 
             for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
+                string activeKey = _apiKeyManager.GetNextAvailableKey("Gemini");
+                if (string.IsNullOrWhiteSpace(activeKey))
+                {
+                    _logger.LogError("Gemini API: No available API keys. All keys are currently exhausted.");
+                    throw new InvalidOperationException("All Gemini API keys are exhausted. Cannot proceed.");
+                }
+
+                string url = $"https://generativelanguage.googleapis.com/v1beta/models/{_modelName}:generateContent?key={activeKey}";
+
                 var request = new HttpRequestMessage(HttpMethod.Post, url)
                 {
                     Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json")
@@ -124,9 +129,21 @@ Example:
 
                     if (!response.IsSuccessStatusCode)
                     {
-                        if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests || (int)response.StatusCode >= 500)
+                        if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
                         {
-                            _logger.LogWarning("Gemini API Rate limit or server error (Attempt {Attempt}/{MaxRetries}): {StatusCode}", attempt, maxRetries, response.StatusCode);
+                            _logger.LogWarning("Gemini API Rate limit exhausted (429) for current key. Attempt {Attempt}/{MaxRetries}", attempt, maxRetries);
+                            _apiKeyManager.MarkKeyExhausted("Gemini", activeKey);
+                            
+                            if (attempt == maxRetries)
+                            {
+                                _logger.LogError("Gemini API Error: {StatusCode} - {Content}", response.StatusCode, responseContent);
+                                response.EnsureSuccessStatusCode();
+                            }
+                            continue;
+                        }
+                        else if ((int)response.StatusCode >= 500)
+                        {
+                            _logger.LogWarning("Gemini API Server error (Attempt {Attempt}/{MaxRetries}): {StatusCode}", attempt, maxRetries, response.StatusCode);
                             
                             if (attempt == maxRetries)
                             {
@@ -134,7 +151,6 @@ Example:
                                 response.EnsureSuccessStatusCode();
                             }
                             
-                            // Check if Retry-After header is provided
                             if (response.Headers.RetryAfter != null && response.Headers.RetryAfter.Delta.HasValue)
                             {
                                 await Task.Delay(response.Headers.RetryAfter.Delta.Value, cancellationToken);
@@ -144,11 +160,10 @@ Example:
                                 await Task.Delay(retryDelayMs, cancellationToken);
                             }
                             
-                            retryDelayMs *= 2; // Exponential backoff (15s, 30s, 60s, 120s)
+                            retryDelayMs *= 2;
                             continue;
                         }
 
-                        // For 4xx errors other than 429, don't retry, fail immediately
                         _logger.LogError("Gemini API Error: {StatusCode} - {Content}", response.StatusCode, responseContent);
                         response.EnsureSuccessStatusCode();
                     }
@@ -186,7 +201,6 @@ Example:
         {
             if (string.IsNullOrWhiteSpace(input)) return "{}";
             
-            // Remove markdown code block syntax if the LLM wrapped it
             if (input.StartsWith("```json"))
             {
                 input = input.Substring(7);
@@ -211,11 +225,3 @@ Example:
         }
     }
 }
-
-
-
-
-
-
-
-

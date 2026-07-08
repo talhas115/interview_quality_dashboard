@@ -180,6 +180,27 @@ namespace InterviewAudit.Application.Services
                             
                         var (candidateName, interviewerName, jd, groupId, candidateId) = parser.Parse(combinedText);
 
+                        // Fallback: Resolve CandidateId from Attendees list if missing from description
+                        if (string.IsNullOrWhiteSpace(candidateId))
+                        {
+                            var candidateAttendee = meeting.Attendees?.FirstOrDefault(a => 
+                                !string.IsNullOrWhiteSpace(candidateName) && 
+                                a.Name.Contains(candidateName.Replace("_", " "), StringComparison.OrdinalIgnoreCase));
+                            
+                            if (candidateAttendee == null && meeting.Attendees != null)
+                            {
+                                candidateAttendee = meeting.Attendees.FirstOrDefault(a => 
+                                    !a.Name.Contains(interviewerName.Replace("_", " "), StringComparison.OrdinalIgnoreCase) &&
+                                    !a.Email.Equals(meeting.OrganizerName, StringComparison.OrdinalIgnoreCase));
+                            }
+
+                            if (candidateAttendee != null && !string.IsNullOrWhiteSpace(candidateAttendee.Email))
+                            {
+                                int atIndex = candidateAttendee.Email.IndexOf('@');
+                                candidateId = atIndex > 0 ? candidateAttendee.Email.Substring(0, atIndex) : candidateAttendee.Email;
+                            }
+                        }
+
                         // --- FLEXIBLE FILTERING LOGIC ---
                         // If user provided a specific target name in settings, strictly filter by it
                         if (!string.IsNullOrWhiteSpace(_filterSettings.InterviewName))
@@ -327,8 +348,26 @@ namespace InterviewAudit.Application.Services
                         _logger.LogInformation("  💾  Saving audit report: {FileName}", reportFileName);
                         await _reportRepository.SaveReportAsync(report, cancellationToken);
 
-                        // Save state as processed
-                        await _stateRepository.AddProcessedMeetingIdAsync(effectiveGroupId, meeting.Id, candidateId, cancellationToken);
+                        // Extract scores from generated audit report
+                        int? candidateScore = ExtractCandidateScore(auditContent);
+                        int? interviewerScore = ExtractInterviewerScore(auditContent);
+                        int? jdAlignmentScore = ExtractJdAlignmentScore(auditContent);
+
+                        var processedMeetingInfo = new ProcessedMeetingInfo
+                        {
+                            MeetingId = meeting.Id,
+                            CandidateId = candidateId,
+                            CandidateName = candidateName ?? "",
+                            InterviewerName = interviewerName ?? "",
+                            StartDateTime = meeting.StartDateTime?.ToString("dddd, dd MMMM yyyy h:mm tt") ?? "",
+                            EndDateTime = meeting.EndDateTime?.ToString("dddd, dd MMMM yyyy h:mm tt") ?? "",
+                            CandidateScore = candidateScore,
+                            InterviewerScore = interviewerScore,
+                            JdAlignmentScore = jdAlignmentScore
+                        };
+
+                        // Save state as processed with metadata
+                        await _stateRepository.AddProcessedMeetingIdAsync(effectiveGroupId, processedMeetingInfo, cancellationToken);
 
                         _logger.LogInformation("  ✅  [SUCCESS] Meeting fully audited and report saved.");
                         _logger.LogInformation("       Report  : {FileName}", reportFileName);
@@ -368,6 +407,35 @@ namespace InterviewAudit.Application.Services
             string invalidRegStr = string.Format(@"([{0}]|\s)+", invalidChars);
             string sanitized = Regex.Replace(name, invalidRegStr, "_");
             return sanitized.Trim('_');
+        }
+
+        private int? ExtractCandidateScore(string report)
+        {
+            if (string.IsNullOrEmpty(report)) return null;
+            var match = Regex.Match(report, @"Overall Candidate Score:\s*(\d+)", RegexOptions.IgnoreCase);
+            return match.Success && int.TryParse(match.Groups[1].Value, out int score) ? score : null;
+        }
+
+        private int? ExtractInterviewerScore(string report)
+        {
+            if (string.IsNullOrEmpty(report)) return null;
+            var match = Regex.Match(report, @"Overall Interviewer Score:\s*(\d+)", RegexOptions.IgnoreCase);
+            return match.Success && int.TryParse(match.Groups[1].Value, out int score) ? score : null;
+        }
+
+        private int? ExtractJdAlignmentScore(string report)
+        {
+            if (string.IsNullOrEmpty(report)) return null;
+            
+            // Try matching "JD Alignment Score: X%" or "JD Alignment Score: X/100"
+            var match1 = Regex.Match(report, @"JD Alignment Score[^:]*:\s*(\d+)", RegexOptions.IgnoreCase);
+            if (match1.Success && int.TryParse(match1.Groups[1].Value, out int score1)) return score1;
+            
+            // Try matching "JD Alignment | X" or "JD Alignment | X/100"
+            var match2 = Regex.Match(report, @"JD Alignment\s*\|\s*(\d+)", RegexOptions.IgnoreCase);
+            if (match2.Success && int.TryParse(match2.Groups[1].Value, out int score2)) return score2;
+
+            return null;
         }
     }
 }

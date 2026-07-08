@@ -14,14 +14,14 @@ namespace InterviewAudit.Infrastructure.Llm
 {
     public class OpenAiLlmService : ILlmService
     {
-        public bool IsAvailable() => true;
-        private readonly string _apiKey;
+        public bool IsAvailable() => _apiKeyManager.HasAvailableKeys("OpenAI");
+        private readonly ILlmApiKeyManager _apiKeyManager;
         private readonly string _modelName;
         private readonly ILogger<OpenAiLlmService> _logger;
 
-        public OpenAiLlmService(string apiKey, string modelName, ILogger<OpenAiLlmService> logger)
+        public OpenAiLlmService(ILlmApiKeyManager apiKeyManager, string modelName, ILogger<OpenAiLlmService> logger)
         {
-            _apiKey = apiKey;
+            _apiKeyManager = apiKeyManager;
             _modelName = modelName;
             _logger = logger;
         }
@@ -30,46 +30,23 @@ namespace InterviewAudit.Infrastructure.Llm
         {
             _logger.LogInformation("OpenAI: Initiating quality audit report generation using model {Model}...", _modelName);
 
-            // Replace variables in Master Prompt
             string fullPrompt = promptTemplate
                 .Replace("{{JD}}", jd)
                 .Replace("{{TRANSCRIPT}}", transcript)
-                // If there's a legacy marker <PASTE JD HERE> or <PASTE INTERVIEW TRANSCRIPT HERE>
                 .Replace("<PASTE JD HERE>", jd)
                 .Replace("<PASTE INTERVIEW TRANSCRIPT HERE>", transcript);
 
-            try
-            {
-                var client = new OpenAIClient(_apiKey);
-                var chatClient = client.GetChatClient(_modelName);
-
-                var chatMessages = new List<ChatMessage>
-                {
-                    new UserChatMessage(fullPrompt)
-                };
-
-                var completion = await chatClient.CompleteChatAsync(chatMessages, cancellationToken: cancellationToken);
-                string responseText = completion.Value.Content[0].Text;
-
-                return responseText;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "OpenAI: Failed to generate report using model {Model}.", _modelName);
-                throw;
-            }
+            return await CallOpenAiChatAsync(fullPrompt, cancellationToken);
         }
 
         public async Task<string> GenerateTextAsync(string prompt, int maxTokens, CancellationToken cancellationToken)
         {
-            return await Task.FromResult(string.Empty);
+            return await CallOpenAiChatAsync(prompt, cancellationToken);
         }
 
         public async Task<(string CandidateName, string InterviewerName)> ExtractAttendeesAsync(List<Attendee> attendees, string transcriptSample, CancellationToken cancellationToken)
         {
             _logger.LogInformation("OpenAI: Extracting candidate and interviewer names using model {Model}...", _modelName);
-
-        
 
             string attendeesJson = JsonSerializer.Serialize(attendees);
             string extractionPrompt = $@"You are a meeting assistant. Analyze the following Teams meeting attendees and the beginning of the interview transcript. Identify who is the candidate (interviewee) and who is the interviewer.
@@ -89,18 +66,7 @@ Example:
 
             try
             {
-                var client = new OpenAIClient(_apiKey);
-                var chatClient = client.GetChatClient(_modelName);
-
-                var chatMessages = new List<ChatMessage>
-                {
-                    new UserChatMessage(extractionPrompt)
-                };
-
-                var completion = await chatClient.CompleteChatAsync(chatMessages, cancellationToken: cancellationToken);
-                string responseText = completion.Value.Content[0].Text;
-
-                // Simple JSON parser
+                string responseText = await CallOpenAiChatAsync(extractionPrompt, cancellationToken);
                 var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 var result = JsonSerializer.Deserialize<AttendeeExtractionResult>(CleanJsonSnippet(responseText), options);
 
@@ -118,9 +84,55 @@ Example:
             return (string.Empty, string.Empty);
         }
 
+        private async Task<string> CallOpenAiChatAsync(string prompt, CancellationToken cancellationToken)
+        {
+            int maxRetries = 5;
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
+            {
+                string activeKey = _apiKeyManager.GetNextAvailableKey("OpenAI");
+                if (string.IsNullOrWhiteSpace(activeKey))
+                {
+                    _logger.LogError("OpenAI API: No available API keys. All keys are currently exhausted.");
+                    throw new InvalidOperationException("All OpenAI API keys are exhausted. Cannot proceed.");
+                }
+
+                try
+                {
+                    var client = new OpenAIClient(activeKey);
+                    var chatClient = client.GetChatClient(_modelName);
+
+                    var chatMessages = new List<ChatMessage>
+                    {
+                        new UserChatMessage(prompt)
+                    };
+
+                    var completion = await chatClient.CompleteChatAsync(chatMessages, cancellationToken: cancellationToken);
+                    return completion.Value.Content[0].Text ?? string.Empty;
+                }
+                catch (System.ClientModel.ClientResultException ex) when (ex.Status == 429)
+                {
+                    _logger.LogWarning("OpenAI API Rate limit exhausted (429) for current key. Attempt {Attempt}/{MaxRetries}", attempt, maxRetries);
+                    _apiKeyManager.MarkKeyExhausted("OpenAI", activeKey);
+                    if (attempt == maxRetries)
+                    {
+                        throw;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "OpenAI API call failed on attempt {Attempt}/{MaxRetries}", attempt, maxRetries);
+                    if (attempt == maxRetries)
+                    {
+                        throw;
+                    }
+                    await Task.Delay(1000 * attempt, cancellationToken);
+                }
+            }
+            throw new InvalidOperationException("OpenAI API call failed: max retries reached.");
+        }
+
         private string CleanJsonSnippet(string text)
         {
-            // Strip markdown block quotes if present
             if (text.Contains("```json"))
             {
                 int start = text.IndexOf("```json") + 7;
@@ -149,11 +161,3 @@ Example:
         }
     }
 }
-
-
-
-
-
-
-
-

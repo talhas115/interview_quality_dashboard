@@ -14,13 +14,13 @@ namespace InterviewAudit.Infrastructure.Llm
 {
     public class GroqLlmService : ILlmService
     {
-        public bool IsAvailable() => _apiKeyManager.HasAvailableKeys();
-        private readonly IGroqApiKeyManager _apiKeyManager;
+        public bool IsAvailable() => _apiKeyManager.HasAvailableKeys("Groq");
+        private readonly ILlmApiKeyManager _apiKeyManager;
         private readonly string _modelName;
         private readonly ILogger<GroqLlmService> _logger;
         private static readonly HttpClient HttpClient = new HttpClient();
 
-        public GroqLlmService(IGroqApiKeyManager apiKeyManager, string modelName, ILogger<GroqLlmService> logger)
+        public GroqLlmService(ILlmApiKeyManager apiKeyManager, string modelName, ILogger<GroqLlmService> logger)
         {
             _apiKeyManager = apiKeyManager;
             _modelName = modelName;
@@ -121,7 +121,7 @@ Example:
 
             for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
-                string activeKey = _apiKeyManager.GetNextAvailableKey();
+                string activeKey = _apiKeyManager.GetNextAvailableKey("Groq");
                 if (string.IsNullOrWhiteSpace(activeKey))
                 {
                     _logger.LogError("Groq API: No available API keys. All keys are currently exhausted.");
@@ -144,7 +144,7 @@ Example:
                         if ((int)response.StatusCode == 429)
                         {
                             _logger.LogWarning("Groq API Rate limit exhausted (429) for current key. Attempt {Attempt}/{MaxRetries}", attempt, maxRetries);
-                            _apiKeyManager.MarkKeyExhausted(activeKey);
+                            _apiKeyManager.MarkKeyExhausted("Groq", activeKey);
                             
                             // Immediately retry with the next available key without waiting 
                             // (unless it was the last attempt)
